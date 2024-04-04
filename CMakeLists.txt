@@ -16,6 +16,12 @@ set(CMAKE_CXX_COMPILE_FLAGS "${CMAKE_CXX_COMPILE_FLAGS} ${MPI_COMPILE_FLAGS}")
 set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} ${MPI_LINK_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${MPI_EXE_LINKER_FLAGS}")
 
+# Set the path to RapidJSON include directory
+set(RAPIDJSON_INCLUDE_DIR /opt/homebrew/Cellar/rapidjson/1.1.0/include)
+
+# Include RapidJSON directory
+include_directories(${RAPIDJSON_INCLUDE_DIR})
+
 # Add source files
 set(SOURCES
     src/main.cpp

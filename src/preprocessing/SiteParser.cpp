@@ -61,7 +61,6 @@ std::vector<SiteInfo> parseSiteLocations(const std::string &filename)
         }
         sites.push_back(site);
     }
-    std::cout << "Number of sites: " << sites.size() << std::endl;
 
     file.close();
     return sites;

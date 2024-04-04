@@ -29,7 +29,6 @@ bool CSVParser::parse()
         }
         data.push_back(row);
     }
-    std::cout << "Data size: " << data.size() << std::endl;
     file.close();
     return true;
 }
