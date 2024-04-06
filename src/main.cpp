@@ -10,6 +10,14 @@
 #include "rapidjson/stringbuffer.h"
 #include "preprocessing/CSVParser.h"
 #include "preprocessing/SiteParser.h"
+#include <boost/tokenizer.hpp>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <iostream>
+#include <cstring>
+
+#define SHARED_MEM_NAME "/county_data_shared_memory"
 
 // Structure to hold data for each data point
 struct DataPoint
@@ -29,6 +37,44 @@ struct DailyData
     std::string maxPollutant;
 };
 
+// Function to write aggregated JSON data to shared memory
+void writeToSharedMemory(const std::string &data)
+{
+    int shm_fd = shm_open(SHARED_MEM_NAME, O_CREAT | O_RDWR, 0666);
+    if (shm_fd == -1)
+    {
+        std::cerr << "Failed to open shared memory" << std::endl;
+        return;
+    }
+
+    // Print the path or name of the shared memory segment
+    std::cout << "Shared memory segment created with name: " << SHARED_MEM_NAME << std::endl;
+
+    // Clear the existing shared memory segment
+    ftruncate(shm_fd, 0);
+
+    // Configure the size of the shared memory segment
+    ftruncate(shm_fd, data.size() + 1);
+
+    // Map the shared memory segment to the process's address space
+    void *ptr = mmap(0, data.size() + 1, PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (ptr == MAP_FAILED)
+    {
+        std::cerr << "Memory mapping failed" << std::endl;
+        return;
+    }
+
+    // Print the address where the data is written
+    std::cout << "Data written to shared memory at address: " << ptr << std::endl;
+
+    // Copy data to shared memory
+    std::memcpy(ptr, data.c_str(), data.size() + 1);
+
+    // Close shared memory descriptor
+    close(shm_fd);
+    std::cout << "Data written to shared memory" << std::endl;
+}
+
 // Function to remove quotes from a string
 std::string removeQuotes(const std::string &str)
 {
@@ -41,21 +87,29 @@ std::string removeQuotes(const std::string &str)
 }
 
 // Function to parse CSV data and filter based on agency name
-std::vector<DataPoint> parseAndFilterCSVData(const std::string &fileName, const std::vector<SiteInfo> &sites)
+void parseAndFilterCSVData(const std::string &fileName, const std::vector<SiteInfo> &sites, std::unordered_map<std::string, std::unordered_map<std::string, DailyData>> &localCountyDailyData)
 {
-    CSVParser parser(fileName);
-    std::vector<DataPoint> filteredData;
-
-    if (!parser.parse())
+    std::ifstream file(fileName);
+    if (!file.is_open())
     {
-        std::cerr << "Error parsing CSV file: " << fileName << std::endl;
-        return filteredData;
+        std::cerr << "Error opening file: " << fileName << std::endl;
+        return;
     }
 
-    std::vector<std::vector<std::string>> data = parser.getData();
+    using namespace boost;
+    typedef tokenizer<escaped_list_separator<char>> Tokenizer;
+    std::string date = fileName.substr(fileName.find_last_of('/') + 1, 8);
 
-    for (const auto &row : data)
+    std::string line;
+    while (std::getline(file, line))
     {
+        Tokenizer tok(line);
+        std::vector<std::string> row;
+        for (const auto &token : tok)
+        {
+            row.push_back(token);
+        }
+
         if (row.size() < 8)
             continue;
 
@@ -85,27 +139,19 @@ std::vector<DataPoint> parseAndFilterCSVData(const std::string &fileName, const 
                 if (site.Latitude == point.latitude && site.Longitude == point.longitude)
                 {
                     point.countyName = site.CountyName;
-                    if (point.countyName.empty() || point.countyName == "")
+                    // update local county data structure
+                    localCountyDailyData[site.CountyName][date].maxAQI = std::max(localCountyDailyData[site.CountyName][date].maxAQI, point.AQI);
+                    if (localCountyDailyData[site.CountyName][date].maxAQI == point.AQI)
                     {
-                        std::cout << "County name is empty or blank" << std::endl;
+                        localCountyDailyData[site.CountyName][date].maxPollutant = point.pollutant;
                     }
                     break;
                 }
             }
-
-            filteredData.push_back(point);
-        }
-    }
-    for (int i = 0; i < filteredData.size(); i++)
-    {
-        if (filteredData[i].countyName.empty() || filteredData[i].countyName == "")
-        {
-            filteredData.erase(filteredData.begin() + i);
-            i--;
         }
     }
 
-    return filteredData;
+    file.close();
 }
 
 // Function to serialize county data to JSON string
@@ -118,18 +164,19 @@ std::string serializeCountyDataToJson(const std::unordered_map<std::string, std:
     for (const auto &countyData : countyDailyData)
     {
         writer.Key(countyData.first.c_str());
-        writer.StartObject();
+        writer.StartArray();
         for (const auto &dayData : countyData.second)
         {
-            writer.Key(dayData.first.c_str());
             writer.StartObject();
+            writer.Key("date");
+            writer.String(dayData.first.c_str());
             writer.Key("maxAQI");
             writer.Int(dayData.second.maxAQI);
             writer.Key("maxPollutant");
             writer.String(dayData.second.maxPollutant.c_str());
             writer.EndObject();
         }
-        writer.EndObject();
+        writer.EndArray();
     }
     writer.EndObject();
 
@@ -150,7 +197,7 @@ int main(int argc, char *argv[])
 
     if (world_size != 8)
     {
-        std::cerr << "This program must be run with 7 MPI processes." << std::endl;
+        std::cerr << "This program must be run with 8 MPI processes." << std::endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
@@ -199,12 +246,12 @@ int main(int argc, char *argv[])
         "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200924"};
 
     // Parse site locations
-    std::vector<SiteInfo> sites = parseSiteLocations("/Users/moukthika/Desktop/cmpe-275/air_quality_simulation/filtered_file22.csv");
+    std::vector<SiteInfo> sites = parseSiteLocations("/Users/moukthika/Desktop/air-now/cmpe-275/monitoring_site_locations.csv");
 
     // Create a data structure to hold daily data for each county
     std::unordered_map<std::string, std::unordered_map<std::string, DailyData>> countyDailyData;
 
-    double start_time = omp_get_wtime(); // Start time measurement
+    double start_time = MPI_Wtime();
 
     // Process 0 will store received JSON data
     std::vector<std::string> receivedJSONData(world_size);
@@ -247,22 +294,21 @@ int main(int argc, char *argv[])
             {
                 std::string fileName = fileNames[j];
                 std::string filePath = folder + "/" + fileName;
-                std::vector<DataPoint> filteredData = parseAndFilterCSVData(filePath, sites);
+                std::unordered_map<std::string, std::unordered_map<std::string, DailyData>> localCountyDailyData;
+                parseAndFilterCSVData(filePath, sites, localCountyDailyData);
 
-                // print process number, thread number and file name
-                int thread_num = omp_get_thread_num();
-                // std::cout << "Process " << world_rank << ", Thread " << thread_num << " processing file: " << fileName << std::endl;
-
-                // Update daily data for each county
+                // Merge local data into global data structure using critical section
 #pragma omp critical
                 {
-                    std::string day = fileName.substr(0, 8); // Extract day from filename
-                    for (const auto &point : filteredData)
+                    for (const auto &countyData : localCountyDailyData)
                     {
-                        countyDailyData[point.countyName][day].maxAQI = std::max(countyDailyData[point.countyName][day].maxAQI, point.AQI);
-                        if (countyDailyData[point.countyName][day].maxAQI == point.AQI)
+                        for (const auto &dayData : countyData.second)
                         {
-                            countyDailyData[point.countyName][day].maxPollutant = point.pollutant;
+                            countyDailyData[countyData.first][dayData.first].maxAQI = std::max(countyDailyData[countyData.first][dayData.first].maxAQI, dayData.second.maxAQI);
+                            if (countyDailyData[countyData.first][dayData.first].maxAQI == dayData.second.maxAQI)
+                            {
+                                countyDailyData[countyData.first][dayData.first].maxPollutant = dayData.second.maxPollutant;
+                            }
                         }
                     }
                 }
@@ -297,17 +343,16 @@ int main(int argc, char *argv[])
             rapidjson::Document document;
             document.Parse(jsonDataChar);
 
-            // Iterate over each county in the received JSON data
             for (auto it = document.MemberBegin(); it != document.MemberEnd(); ++it)
             {
                 std::string county = it->name.GetString();
 
                 // Iterate over each date and its corresponding data
-                for (auto dayIt = it->value.GetObject().MemberBegin(); dayIt != it->value.GetObject().MemberEnd(); ++dayIt)
+                for (auto dayIt = it->value.GetArray().Begin(); dayIt != it->value.GetArray().End(); ++dayIt)
                 {
-                    std::string date = dayIt->name.GetString();
-                    int maxAQI = dayIt->value.GetObject()["maxAQI"].GetInt();
-                    std::string maxPollutant = dayIt->value.GetObject()["maxPollutant"].GetString();
+                    std::string date = (*dayIt)["date"].GetString();
+                    int maxAQI = (*dayIt)["maxAQI"].GetInt();
+                    std::string maxPollutant = (*dayIt)["maxPollutant"].GetString();
 
                     // Aggregate data under the county key
                     countyDailyData[county][date] = {maxAQI, maxPollutant};
@@ -317,17 +362,27 @@ int main(int argc, char *argv[])
             delete[] jsonDataChar;
         }
 
-        // Print the aggregated county data
+        std::ostringstream oss;
+
+        // Iterate over each county in the received data and write it to a string stream
         for (const auto &countyData : countyDailyData)
         {
-            std::cout << "County: " << countyData.first << std::endl;
+            oss << "County: " << countyData.first << std::endl;
             for (const auto &dayData : countyData.second)
             {
-                std::cout << "Date: " << dayData.first << ", ";
-                std::cout << "Max AQI: " << dayData.second.maxAQI << ", ";
-                std::cout << "Max Pollutant: " << dayData.second.maxPollutant << std::endl;
+                oss << "Date: " << dayData.first << ", ";
+                oss << "Max AQI: " << dayData.second.maxAQI << ", ";
+                oss << "Max Pollutant: " << dayData.second.maxPollutant << std::endl;
             }
         }
+
+        std::string data = oss.str();
+
+        // print the aggregated data
+        // std::cout << data << std::endl;
+
+        // Write aggregated data to shared memory
+        writeToSharedMemory(data);
     }
 
     MPI_Finalize();

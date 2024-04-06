@@ -19,8 +19,14 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${MPI_EXE_LINKER_FLAGS}")
 # Set the path to RapidJSON include directory
 set(RAPIDJSON_INCLUDE_DIR /opt/homebrew/Cellar/rapidjson/1.1.0/include)
 
+# Find Boost
+find_package(Boost REQUIRED COMPONENTS system filesystem)
+
 # Include RapidJSON directory
 include_directories(${RAPIDJSON_INCLUDE_DIR})
+
+# Include Boost directories
+include_directories(${Boost_INCLUDE_DIRS})
 
 # Add source files
 set(SOURCES
@@ -33,3 +39,5 @@ set(SOURCES
 add_executable(main ${SOURCES})
 target_compile_features(main PRIVATE cxx_std_17)
 target_link_libraries(main ${MPI_LIBRARIES})
+# Link Boost libraries
+target_link_libraries(main ${Boost_LIBRARIES})
