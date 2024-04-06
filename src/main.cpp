@@ -18,6 +18,7 @@
 #include <cstring>
 
 #define SHARED_MEM_NAME "/county_data_shared_memory"
+#define SHARED_MEM_NAME_BASELINE "/shared_memory_baseline"
 
 // Structure to hold data for each data point
 struct DataPoint
@@ -37,10 +38,40 @@ struct DailyData
     std::string maxPollutant;
 };
 
-// Function to write aggregated JSON data to shared memory
-void writeToSharedMemory(const std::string &data)
+void unlinkSharedMemoryIfExists(const std::string &sharedMemName)
 {
-    int shm_fd = shm_open(SHARED_MEM_NAME, O_CREAT | O_RDWR, 0666);
+    int shm_fd = shm_open(sharedMemName.c_str(), O_RDWR, 0);
+    if (shm_fd == -1)
+    {
+        // Check if the error is due to the segment not existing
+        if (errno != ENOENT)
+        {
+            // print error message and shared memory name
+            std::cerr << "Failed to open shared memory: " << sharedMemName << std::endl;
+            perror("shm_open");
+        }
+        return;
+    }
+
+    // Close shared memory descriptor
+    close(shm_fd);
+
+    // Unlink shared memory segment
+    if (shm_unlink(sharedMemName.c_str()) == -1)
+    {
+        // print error message and shared memory name
+        std::cerr << "Failed to unlink shared memory: " << sharedMemName << std::endl;
+        perror("shm_unlink");
+        return;
+    }
+
+    std::cout << "Shared memory segment unlinked: " << sharedMemName << std::endl;
+}
+
+// Function to write aggregated JSON data to shared memory
+void writeToSharedMemory(const std::string &data, const std::string &sharedMemName)
+{
+    int shm_fd = shm_open(sharedMemName.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     if (shm_fd == -1)
     {
         std::cerr << "Failed to open shared memory" << std::endl;
@@ -48,14 +79,12 @@ void writeToSharedMemory(const std::string &data)
     }
 
     // Print the path or name of the shared memory segment
-    std::cout << "Shared memory segment created with name: " << SHARED_MEM_NAME << std::endl;
+    std::cout << "Shared memory segment created with name: " << sharedMemName << std::endl;
 
-    // Clear the existing shared memory segment
-    ftruncate(shm_fd, 0);
-
-    // Configure the size of the shared memory segment
-    ftruncate(shm_fd, data.size() + 1);
-
+    if (ftruncate(shm_fd, data.size() + 1) == -1)
+    {
+        perror("ftruncate");
+    }
     // Map the shared memory segment to the process's address space
     void *ptr = mmap(0, data.size() + 1, PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (ptr == MAP_FAILED)
@@ -327,6 +356,66 @@ int main(int argc, char *argv[])
     }
     else // Process 0 receives and deserializes data
     {
+
+        // process aug 10th data first to get the baseline and write to shared memory and then wait for other processes to send data
+        std::string folder = "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200810";
+
+        // List of CSV file names within the folder
+        std::vector<std::string> fileNames;
+        for (int hour = 1; hour <= 23; hour += 2)
+        {
+            std::string hourString = (hour < 10 ? "0" : "") + std::to_string(hour);
+            size_t lastSlashPos = folder.find_last_of('/');
+
+            // Extract the substring containing the date
+            std::string date = folder.substr(lastSlashPos + 1, 8);
+            std::string fileName = date + "-" + hourString + ".csv";
+            fileNames.push_back(fileName);
+        }
+
+        // Process files using OpenMP
+#pragma omp parallel for
+        for (int j = 0; j < fileNames.size(); ++j)
+        {
+            std::string fileName = fileNames[j];
+            std::string filePath = folder + "/" + fileName;
+            std::unordered_map<std::string, std::unordered_map<std::string, DailyData>> localCountyDailyData;
+            parseAndFilterCSVData(filePath, sites, localCountyDailyData);
+
+// Merge local data into global data structure using critical section
+#pragma omp critical
+            for (const auto &countyData : localCountyDailyData)
+            {
+                for (const auto &dayData : countyData.second)
+                {
+                    countyDailyData[countyData.first][dayData.first].maxAQI = std::max(countyDailyData[countyData.first][dayData.first].maxAQI, dayData.second.maxAQI);
+                    if (countyDailyData[countyData.first][dayData.first].maxAQI == dayData.second.maxAQI)
+                    {
+                        countyDailyData[countyData.first][dayData.first].maxPollutant = dayData.second.maxPollutant;
+                    }
+                }
+            }
+        }
+
+        std::ostringstream oss_aug10;
+
+        // Iterate over each county in the received data and write it to a string stream
+        for (const auto &countyData : countyDailyData)
+        {
+            oss_aug10 << "County: " << countyData.first << std::endl;
+            for (const auto &dayData : countyData.second)
+            {
+                oss_aug10 << "Date: " << dayData.first << ", ";
+                oss_aug10 << "Max AQI: " << dayData.second.maxAQI << ", ";
+                oss_aug10 << "Max Pollutant: " << dayData.second.maxPollutant << std::endl;
+            }
+        }
+
+        std::string data_aug10 = oss_aug10.str();
+        unlinkSharedMemoryIfExists(SHARED_MEM_NAME_BASELINE);
+
+        writeToSharedMemory(data_aug10, SHARED_MEM_NAME_BASELINE);
+
         // Aggregate received JSON data for each county
         for (int source_rank = 1; source_rank < world_size; ++source_rank)
         {
@@ -382,7 +471,8 @@ int main(int argc, char *argv[])
         // std::cout << data << std::endl;
 
         // Write aggregated data to shared memory
-        writeToSharedMemory(data);
+        unlinkSharedMemoryIfExists(SHARED_MEM_NAME);
+        writeToSharedMemory(data, SHARED_MEM_NAME);
     }
 
     MPI_Finalize();
