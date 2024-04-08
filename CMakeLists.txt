@@ -41,3 +41,12 @@ target_compile_features(main PRIVATE cxx_std_17)
 target_link_libraries(main ${MPI_LIBRARIES})
 # Link Boost libraries
 target_link_libraries(main ${Boost_LIBRARIES})
+
+find_package(Python3 COMPONENTS Development)
+
+if(Python3_FOUND)
+    include_directories(${Python3_INCLUDE_DIRS})
+    target_link_libraries(main ${Python3_LIBRARIES})
+else()
+    message(FATAL_ERROR "Python3 not found")
+endif()

@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <cstring>
+#include "python.h"
 
 #define SHARED_MEM_NAME "/county_data_shared_memory"
 #define SHARED_MEM_NAME_BASELINE "/shared_memory_baseline"
@@ -231,51 +232,51 @@ int main(int argc, char *argv[])
     }
 
     std::vector<std::string> folderNames = {
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200814",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200815",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200816",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200817",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200818",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200819",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200820",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200821",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200822",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200823",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200824",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200825",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200826",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200827",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200828",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200829",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200830",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200831",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200901",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200902",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200903",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200904",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200905",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200906",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200907",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200908",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200909",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200910",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200911",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200912",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200913",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200914",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200915",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200916",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200917",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200918",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200919",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200920",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200921",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200922",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200923",
-        "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200924"};
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200814",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200815",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200816",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200817",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200818",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200819",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200820",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200821",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200822",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200823",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200824",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200825",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200826",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200827",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200828",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200829",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200830",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200831",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200901",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200902",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200903",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200904",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200905",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200906",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200907",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200908",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200909",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200910",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200911",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200912",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200913",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200914",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200915",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200916",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200917",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200918",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200919",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200920",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200921",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200922",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200923",
+            "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200924"};
 
     // Parse site locations
-    std::vector<SiteInfo> sites = parseSiteLocations("/Users/moukthika/Desktop/air-now/cmpe-275/monitoring_site_locations.csv");
+    std::vector<SiteInfo> sites = parseSiteLocations("/Users/keerthanaparsa/Desktop/MiniProject2_275/cmpe-275/monitoring_site_locations.csv");
 
     // Create a data structure to hold daily data for each county
     std::unordered_map<std::string, std::unordered_map<std::string, DailyData>> countyDailyData;
@@ -358,7 +359,7 @@ int main(int argc, char *argv[])
     {
 
         // process aug 10th data first to get the baseline and write to shared memory and then wait for other processes to send data
-        std::string folder = "/Users/moukthika/Desktop/cmpe-275/airnow-2020fire/data/20200810";
+        std::string folder = "/Users/keerthanaparsa/Desktop/CMPE-275/MINI2_DATA/Data/20200810";
 
         // List of CSV file names within the folder
         std::vector<std::string> fileNames;
@@ -473,6 +474,22 @@ int main(int argc, char *argv[])
         // Write aggregated data to shared memory
         unlinkSharedMemoryIfExists(SHARED_MEM_NAME);
         writeToSharedMemory(data, SHARED_MEM_NAME);
+
+       //   Create your own virtual environment and install matplotlib
+        setenv("PYTHONPATH", "/Users/keerthanaparsa/Desktop/MiniProject2_275/cmpe-275/venv/lib/python3.12/site-packages", 1);
+        Py_Initialize();
+        PyObject* sysPath = PySys_GetObject((char*)"path");
+        PyList_Append(sysPath, PyUnicode_FromString("/Users/keerthanaparsa/Desktop/CMPE-275/cmpe-275/src"));
+
+        const char* scriptName = "visualizations";
+        PyObject* pModule = PyImport_ImportModule(scriptName);
+        if (pModule != nullptr) {
+            std::cout << "Module imported successfully." << std::endl;
+        } else {
+            PyErr_Print();
+            fprintf(stderr, "Failed to load \"%s\"\n", scriptName);
+        }
+        Py_Finalize();
     }
 
     MPI_Finalize();
