@@ -14,13 +14,12 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <iostream>
 #include <cstring>
+#include "python.h"
 
 #define SHARED_MEM_NAME "/county_data_shared_memory"
 #define SHARED_MEM_NAME_BASELINE "/shared_memory_baseline"
 
-// Structure to hold data for each data point
 struct DataPoint
 {
     double latitude;
@@ -31,78 +30,11 @@ struct DataPoint
     std::string countyName;
 };
 
-// Structure to hold daily data for each county
 struct DailyData
 {
     int maxAQI;
     std::string maxPollutant;
 };
-
-void unlinkSharedMemoryIfExists(const std::string &sharedMemName)
-{
-    int shm_fd = shm_open(sharedMemName.c_str(), O_RDWR, 0);
-    if (shm_fd == -1)
-    {
-        // Check if the error is due to the segment not existing
-        if (errno != ENOENT)
-        {
-            // print error message and shared memory name
-            std::cerr << "Failed to open shared memory: " << sharedMemName << std::endl;
-            perror("shm_open");
-        }
-        return;
-    }
-
-    // Close shared memory descriptor
-    close(shm_fd);
-
-    // Unlink shared memory segment
-    if (shm_unlink(sharedMemName.c_str()) == -1)
-    {
-        // print error message and shared memory name
-        std::cerr << "Failed to unlink shared memory: " << sharedMemName << std::endl;
-        perror("shm_unlink");
-        return;
-    }
-
-    std::cout << "Shared memory segment unlinked: " << sharedMemName << std::endl;
-}
-
-// Function to write aggregated JSON data to shared memory
-void writeToSharedMemory(const std::string &data, const std::string &sharedMemName)
-{
-    int shm_fd = shm_open(sharedMemName.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-    if (shm_fd == -1)
-    {
-        std::cerr << "Failed to open shared memory" << std::endl;
-        return;
-    }
-
-    // Print the path or name of the shared memory segment
-    std::cout << "Shared memory segment created with name: " << sharedMemName << std::endl;
-
-    if (ftruncate(shm_fd, data.size() + 1) == -1)
-    {
-        perror("ftruncate");
-    }
-    // Map the shared memory segment to the process's address space
-    void *ptr = mmap(0, data.size() + 1, PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (ptr == MAP_FAILED)
-    {
-        std::cerr << "Memory mapping failed" << std::endl;
-        return;
-    }
-
-    // Print the address where the data is written
-    std::cout << "Data written to shared memory at address: " << ptr << std::endl;
-
-    // Copy data to shared memory
-    std::memcpy(ptr, data.c_str(), data.size() + 1);
-
-    // Close shared memory descriptor
-    close(shm_fd);
-    std::cout << "Data written to shared memory" << std::endl;
-}
 
 // Function to remove quotes from a string
 std::string removeQuotes(const std::string &str)
@@ -210,6 +142,56 @@ std::string serializeCountyDataToJson(const std::unordered_map<std::string, std:
     writer.EndObject();
 
     return s.GetString();
+}
+
+void unlinkSharedMemoryIfExists(const std::string &sharedMemName)
+{
+    int shm_fd = shm_open(sharedMemName.c_str(), O_RDWR, 0);
+    if (shm_fd == -1)
+    {
+        // Check if the error is due to the segment not existing
+        if (errno != ENOENT)
+        {
+            std::cerr << "Failed to open shared memory: " << sharedMemName << std::endl;
+            perror("shm_open");
+        }
+        return;
+    }
+
+    close(shm_fd);
+
+    if (shm_unlink(sharedMemName.c_str()) == -1)
+    {
+        std::cerr << "Failed to unlink shared memory: " << sharedMemName << std::endl;
+        perror("shm_unlink");
+        return;
+    }
+}
+
+void writeToSharedMemory(const std::string &data, const std::string &sharedMemName)
+{
+    int shm_fd = shm_open(sharedMemName.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+    if (shm_fd == -1)
+    {
+        std::cerr << "Failed to open shared memory" << std::endl;
+        return;
+    }
+
+    if (ftruncate(shm_fd, data.size() + 1) == -1)
+    {
+        perror("ftruncate");
+    }
+
+    void *ptr = mmap(0, data.size() + 1, PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (ptr == MAP_FAILED)
+    {
+        std::cerr << "Memory mapping failed" << std::endl;
+        return;
+    }
+
+    std::memcpy(ptr, data.c_str(), data.size() + 1);
+
+    close(shm_fd);
 }
 
 int main(int argc, char *argv[])
@@ -467,12 +449,28 @@ int main(int argc, char *argv[])
 
         std::string data = oss.str();
 
-        // print the aggregated data
-        // std::cout << data << std::endl;
-
         // Write aggregated data to shared memory
         unlinkSharedMemoryIfExists(SHARED_MEM_NAME);
         writeToSharedMemory(data, SHARED_MEM_NAME);
+
+        //   Create your own virtual environment and install matplotlib
+        setenv("PYTHONPATH", "/Users/moukthika/Desktop/MiniProject2_275/cmpe-275/venv/lib/python3.12/site-packages", 1);
+        Py_Initialize();
+        PyObject *sysPath = PySys_GetObject((char *)"path");
+        PyList_Append(sysPath, PyUnicode_FromString("/Users/moukthika/Desktop/CMPE-275/cmpe-275/src"));
+
+        const char *scriptName = "visualizations";
+        PyObject *pModule = PyImport_ImportModule(scriptName);
+        if (pModule != nullptr)
+        {
+            std::cout << "Module imported successfully." << std::endl;
+        }
+        else
+        {
+            PyErr_Print();
+            fprintf(stderr, "Failed to load \"%s\"\n", scriptName);
+        }
+        Py_Finalize();
     }
 
     MPI_Finalize();
@@ -481,7 +479,7 @@ int main(int argc, char *argv[])
     double elapsed_time = end_time - start_time;
 
     // Output processing time
-    // std::cout << "Process " << world_rank << " took " << elapsed_time << " seconds to process files." << std::endl;
+    std::cout << "Process " << world_rank << " took " << elapsed_time << " seconds to process files." << std::endl;
 
     return 0;
 }
